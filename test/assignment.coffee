@@ -6,6 +6,7 @@
 # * Destructuring Assignment
 # * Context Property (@) Assignment
 # * Existential Assignment (?=)
+# * Assignment to variables similar to generated variables
 
 test "context property assignment (using @)", ->
   nonce = {}
@@ -18,12 +19,6 @@ test "unassignable values", ->
   nonce = {}
   for nonref in ['', '""', '0', 'f()'].concat CoffeeScript.RESERVED
     eq nonce, (try CoffeeScript.compile "#{nonref} = v" catch e then nonce)
-
-test "compound assignments should not declare", ->
-  # TODO: make description more clear
-  # TODO: remove reference to Math
-  eq Math, (-> Math or= 0)()
-
 
 # Compound Assignment
 
@@ -87,6 +82,9 @@ test "compound assignment should be careful about caching variables", ->
   eq 5, base.five
   eq 5, count
 
+  eq 5, base().five ?= 6
+  eq 6, count
+
 test "compound assignment with implicit objects", ->
   obj = undefined
   obj ?=
@@ -133,6 +131,13 @@ test "more compound assignment", ->
   val ?= true
   eq c, val
 
+test "#1192: assignment starting with object literals", ->
+  doesNotThrow (-> CoffeeScript.run "{}.p = 0")
+  doesNotThrow (-> CoffeeScript.run "{}.p++")
+  doesNotThrow (-> CoffeeScript.run "{}[0] = 1")
+  doesNotThrow (-> CoffeeScript.run """{a: 1, 'b', "#{1}": 2}.p = 0""")
+  doesNotThrow (-> CoffeeScript.run "{a:{0:{}}}.a[0] = 0")
+
 
 # Destructuring Assignment
 
@@ -164,7 +169,7 @@ test "variable swapping to verify caching of RHS values when appropriate", ->
   eq nonceB, b
   eq nonceC, c
 
-test "#713", ->
+test "#713: destructuring assignment should return right-hand-side value", ->
   nonces = [nonceA={},nonceB={}]
   eq nonces, [a, b] = [c, d] = nonces
   eq nonceA, a
@@ -249,7 +254,7 @@ test "destructuring assignment with context (@) properties", ->
   eq d, obj.d
   eq e, obj.e
 
-test "#1024", ->
+test "#1024: destructure empty assignments to produce javascript-like results", ->
   eq 2 * [] = 3 + 5, 16
 
 test "#1005: invalid identifiers allowed on LHS of destructuring assignment", ->
@@ -267,6 +272,126 @@ test "#1005: invalid identifiers allowed on LHS of destructuring assignment", ->
       CoffeeScript.compile "[@#{v}] = x"
       CoffeeScript.compile "[@#{v}...] = x"
 
+test "#2055: destructuring assignment with `new`", ->
+  {length} = new Array
+  eq 0, length
+
+test "#156: destructuring with expansion", ->
+  array = [1..5]
+  [first, ..., last] = array
+  eq 1, first
+  eq 5, last
+  [..., lastButOne, last] = array
+  eq 4, lastButOne
+  eq 5, last
+  [first, second, ..., last] = array
+  eq 2, second
+  [..., last] = 'strings as well -> x'
+  eq 'x', last
+  throws (-> CoffeeScript.compile "[1, ..., 3]"),        null, "prohibit expansion outside of assignment"
+  throws (-> CoffeeScript.compile "[..., a, b...] = c"), null, "prohibit expansion and a splat"
+  throws (-> CoffeeScript.compile "[...] = c"),          null, "prohibit lone expansion"
+
+test "destructuring with dynamic keys", ->
+  {"#{'a'}": a, """#{'b'}""": b, c} = {a: 1, b: 2, c: 3}
+  eq 1, a
+  eq 2, b
+  eq 3, c
+  throws -> CoffeeScript.compile '{"#{a}"} = b'
+
+test "simple array destructuring defaults", ->
+  [a = 1] = []
+  eq 1, a
+  [a = 2] = [undefined]
+  eq 2, a
+  [a = 3] = [null]
+  eq 3, a
+  [a = 4] = [0]
+  eq 0, a
+  arr = [a = 5]
+  eq 5, a
+  arrayEq [5], arr
+
+test "simple object destructuring defaults", ->
+  {b = 1} = {}
+  eq b, 1
+  {b = 2} = {b: undefined}
+  eq b, 2
+  {b = 3} = {b: null}
+  eq b, 3
+  {b = 4} = {b: 0}
+  eq b, 0
+
+  {b: c = 1} = {}
+  eq c, 1
+  {b: c = 2} = {b: undefined}
+  eq c, 2
+  {b: c = 3} = {b: null}
+  eq c, 3
+  {b: c = 4} = {b: 0}
+  eq c, 0
+
+test "multiple array destructuring defaults", ->
+  [a = 1, b = 2, c] = [null, 12, 13]
+  eq a, 1
+  eq b, 12
+  eq c, 13
+  [a, b = 2, c = 3] = [null, 12, 13]
+  eq a, null
+  eq b, 12
+  eq c, 13
+  [a = 1, b, c = 3] = [11, 12]
+  eq a, 11
+  eq b, 12
+  eq c, 3
+
+test "multiple object destructuring defaults", ->
+  {a = 1, b: bb = 2, 'c': c = 3, "#{0}": d = 4} = {"#{'b'}": 12}
+  eq a, 1
+  eq bb, 12
+  eq c, 3
+  eq d, 4
+
+test "array destructuring defaults with splats", ->
+  [..., a = 9] = []
+  eq a, 9
+  [..., b = 9] = [19]
+  eq b, 19
+
+test "deep destructuring assignment with defaults", ->
+  [a, [{b = 1, c = 3}] = [c: 2]] = [0]
+  eq a, 0
+  eq b, 1
+  eq c, 2
+
+test "destructuring assignment with context (@) properties and defaults", ->
+  a={}; b={}; c={}; d={}; e={}
+  obj =
+    fn: () ->
+      local = [a, {b, c: null}, d]
+      [@a, {b: @b = b, @c = c}, @d, @e = e] = local
+  eq undefined, obj[key] for key in ['a','b','c','d','e']
+  obj.fn()
+  eq a, obj.a
+  eq b, obj.b
+  eq c, obj.c
+  eq d, obj.d
+  eq e, obj.e
+
+test "destructuring assignment with defaults single evaluation", ->
+  callCount = 0
+  fn = -> callCount++
+  [a = fn()] = []
+  eq 0, a
+  eq 1, callCount
+  [a = fn()] = [10]
+  eq 10, a
+  eq 1, callCount
+  {a = fn(), b: c = fn()} = {a: 20, b: null}
+  eq 20, a
+  eq c, 1
+  eq callCount, 2
+
 
 # Existential Assignment
 
@@ -281,8 +406,30 @@ test "existential assignment", ->
   c = null
   c ?= nonce
   eq nonce, c
-  d ?= nonce
-  eq nonce, d
+
+test "#1627: prohibit conditional assignment of undefined variables", ->
+  throws (-> CoffeeScript.compile "x ?= 10"),        null, "prohibit (x ?= 10)"
+  throws (-> CoffeeScript.compile "x ||= 10"),       null, "prohibit (x ||= 10)"
+  throws (-> CoffeeScript.compile "x or= 10"),       null, "prohibit (x or= 10)"
+  throws (-> CoffeeScript.compile "do -> x ?= 10"),  null, "prohibit (do -> x ?= 10)"
+  throws (-> CoffeeScript.compile "do -> x ||= 10"), null, "prohibit (do -> x ||= 10)"
+  throws (-> CoffeeScript.compile "do -> x or= 10"), null, "prohibit (do -> x or= 10)"
+  doesNotThrow (-> CoffeeScript.compile "x = null; x ?= 10"),        "allow (x = null; x ?= 10)"
+  doesNotThrow (-> CoffeeScript.compile "x = null; x ||= 10"),       "allow (x = null; x ||= 10)"
+  doesNotThrow (-> CoffeeScript.compile "x = null; x or= 10"),       "allow (x = null; x or= 10)"
+  doesNotThrow (-> CoffeeScript.compile "x = null; do -> x ?= 10"),  "allow (x = null; do -> x ?= 10)"
+  doesNotThrow (-> CoffeeScript.compile "x = null; do -> x ||= 10"), "allow (x = null; do -> x ||= 10)"
+  doesNotThrow (-> CoffeeScript.compile "x = null; do -> x or= 10"), "allow (x = null; do -> x or= 10)"
+
+  throws (-> CoffeeScript.compile "-> -> -> x ?= 10"), null, "prohibit (-> -> -> x ?= 10)"
+  doesNotThrow (-> CoffeeScript.compile "x = null; -> -> -> x ?= 10"), "allow (x = null; -> -> -> x ?= 10)"
+
+test "more existential assignment", ->
+  global.temp ?= 0
+  eq global.temp, 0
+  global.temp or= 100
+  eq global.temp, 100
+  delete global.temp
 
 test "#1348, #1216: existential assignment compilation", ->
   nonce = {}
@@ -291,14 +438,7 @@ test "#1348, #1216: existential assignment compilation", ->
   eq nonce, b
   #the first ?= compiles into a statement; the second ?= compiles to a ternary expression
   eq a ?= b ?= 1, nonce
-  
-  e ?= f ?= g ?= 1
-  eq e + g, 2
-  
-  #need to ensure the two vars are not defined, hence the strange names;
-  # broke earlier when using c ?= d ?= 1 because `d` is declared elsewhere
-  eq und1_1348 ?= und2_1348 ?= 1, 1
-  
+
   if a then a ?= 2 else a = 3
   eq a, nonce
 
@@ -307,14 +447,14 @@ test "#1591, #1101: splatted expressions in destructuring assignment must be ass
   for nonref in ['', '""', '0', 'f()', '(->)'].concat CoffeeScript.RESERVED
     eq nonce, (try CoffeeScript.compile "[#{nonref}...] = v" catch e then nonce)
 
-test "#1643: splatted accesses in destructuring assignments should not be declared as variables", -> 
+test "#1643: splatted accesses in destructuring assignments should not be declared as variables", ->
   nonce = {}
   accesses = ['o.a', 'o["a"]', '(o.a)', '(o.a).a', '@o.a', 'C::a', 'C::', 'f().a', 'o?.a', 'o?.a.b', 'f?().a']
   for access in accesses
     for i,j in [1,2,3] #position can matter
-      code = 
+      code =
         """
-        nonce = {}; nonce2 = {}; nonce3 = {}; 
+        nonce = {}; nonce2 = {}; nonce3 = {};
         @o = o = new (class C then a:{}); f = -> o
         [#{new Array(i).join('x,')}#{access}...] = [#{new Array(i).join('0,')}nonce, nonce2, nonce3]
         unless #{access}[0] is nonce and #{access}[1] is nonce2 and #{access}[2] is nonce3 then throw new Error('[...]')
@@ -326,8 +466,107 @@ test "#1643: splatted accesses in destructuring assignments should not be declar
     for i,j in [1,2,3]
       code =
         """
-        nonce = {}; nonce2 = {}; nonce3 = {}; 
+        nonce = {}; nonce2 = {}; nonce3 = {};
         [#{new Array(i).join('x,')}#{subpattern}...] = [#{new Array(i).join('0,')}nonce, nonce2, nonce3]
         unless sub is nonce and sub2 is nonce2 and sub3 is nonce3 then throw new Error('[sub...]')
         """
       eq nonce, unless (try CoffeeScript.run code, bare: true catch e then true) then nonce
+
+test "#1838: Regression with variable assignment", ->
+  name =
+  'dave'
+
+  eq name, 'dave'
+
+test '#2211: splats in destructured parameters', ->
+  doesNotThrow -> CoffeeScript.compile '([a...]) ->'
+  doesNotThrow -> CoffeeScript.compile '([a...],b) ->'
+  doesNotThrow -> CoffeeScript.compile '([a...],[b...]) ->'
+  throws -> CoffeeScript.compile '([a...,[a...]]) ->'
+  doesNotThrow -> CoffeeScript.compile '([a...,[b...]]) ->'
+
+test '#2213: invocations within destructured parameters', ->
+  throws -> CoffeeScript.compile '([a()])->'
+  throws -> CoffeeScript.compile '([a:b()])->'
+  throws -> CoffeeScript.compile '([a:b.c()])->'
+  throws -> CoffeeScript.compile '({a()})->'
+  throws -> CoffeeScript.compile '({a:b()})->'
+  throws -> CoffeeScript.compile '({a:b.c()})->'
+
+test '#2532: compound assignment with terminator', ->
+  doesNotThrow -> CoffeeScript.compile """
+  a = "hello"
+  a +=
+  "
+  world
+  !
+  "
+  """
+
+test "#2613: parens on LHS of destructuring", ->
+  a = {}
+  [(a).b] = [1, 2, 3]
+  eq a.b, 1
+
+test "#2181: conditional assignment as a subexpression", ->
+  a = false
+  false && a or= true
+  eq false, a
+  eq false, not a or= true
+
+test "#1500: Assignment to variables similar to generated variables", ->
+  len = 0
+  x = ((results = null; n) for n in [1, 2, 3])
+  arrayEq [1, 2, 3], x
+  eq 0, len
+
+  for x in [1, 2, 3]
+    f = ->
+      i = 0
+    f()
+    eq 'undefined', typeof i
+
+  ref = 2
+  x = ref * 2 ? 1
+  eq x, 4
+  eq 'undefined', typeof ref1
+
+  x = {}
+  base = -> x
+  name = -1
+  base()[-name] ?= 2
+  eq x[1], 2
+  eq base(), x
+  eq name, -1
+
+  f = (@a, a) -> [@a, a]
+  arrayEq [1, 2], f.call scope = {}, 1, 2
+  eq 1, scope.a
+
+  try throw 'foo'
+  catch error
+    eq error, 'foo'
+
+  eq error, 'foo'
+
+  doesNotThrow -> CoffeeScript.compile '(@slice...) ->'
+
+test "Assignment to variables similar to helper functions", ->
+  f = (slice...) -> slice
+  arrayEq [1, 2, 3], f 1, 2, 3
+  eq 'undefined', typeof slice1
+
+  class A
+  class B extends A
+    extend = 3
+    hasProp = 4
+    value: 5
+    method: (bind, bind1) => [bind, bind1, extend, hasProp, @value]
+  {method} = new B
+  arrayEq [1, 2, 3, 4, 5], method 1, 2
+
+  modulo = -1 %% 3
+  eq 2, modulo
+
+  indexOf = [1, 2, 3]
+  ok 2 in indexOf

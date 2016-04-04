@@ -39,6 +39,8 @@ test "unbounded slicing", ->
   for a in [-shared.length+1...shared.length]
     arrayEq shared[..a][...-1] , shared[...a]
 
+  arrayEq [1, 2, 3], [1, 2, 3][..]
+
 test "#930, #835, #831, #746 #624: inclusive slices to -1 should slice to end", ->
   arrayEq shared, shared[0..-1]
   arrayEq shared, shared[..-1]
@@ -59,6 +61,9 @@ test "#1722: operator precedence in unbounded slice compilation", ->
   arrayEq [0..n], list[..n or 0]
   arrayEq [0..n], list[..if n then n else 0]
 
+test "#2349: inclusive slicing to numeric strings", ->
+  arrayEq [0, 1], [0..10][.."1"]
+
 
 # Splicing
 
@@ -78,6 +83,9 @@ test "unbounded splicing", ->
 
   ary[...3] = [7, 8, 9]
   arrayEq [7, 8, 9, 9, 8, 7], ary
+
+  ary[..] = [1, 2, 3]
+  arrayEq [1, 2, 3], ary
 
 test "splicing with variables as endpoints", ->
   [a, b] = [1, 8]
@@ -136,3 +144,12 @@ test "#1723: operator precedence in unbounded splice compilation", ->
   list = [0..9]
   list[..if n then n else 0] = n
   arrayEq [n..9], list
+
+test "#2953: methods on endpoints in assignment from array splice literal", ->
+  list = [0..9]
+
+  Number.prototype.same = -> this
+  list[1.same()...9.same()] = 5
+  delete Number.prototype.same
+
+  arrayEq [0, 5, 9], list
