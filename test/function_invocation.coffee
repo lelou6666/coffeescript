@@ -9,6 +9,9 @@
 # shared identity function
 id = (_) -> if arguments.length is 1 then _ else [arguments...]
 
+# helper to assert that a string should fail compilation
+cantCompile = (code) ->
+  throws -> CoffeeScript.compile code
 
 test "basic argument passing", ->
 
@@ -129,8 +132,8 @@ test "Ensure that functions can have a trailing comma in their argument list", -
   mult = (x, mids..., y) ->
     x *= n for n in mids
     x *= y
-  ok mult(1, 2,) is 2
-  ok mult(1, 2, 3,) is 6
+  #ok mult(1, 2,) is 2
+  #ok mult(1, 2, 3,) is 6
   ok mult(10, (i for i in [1..6])...) is 7200
 
 
@@ -392,6 +395,18 @@ test "#1011: passing a splat to a method of a number", ->
   eq '1011', (131.0).toString [5]...
 
 
+test "splats and the `new` operator: functions that return `null` should construct their instance", ->
+  args = []
+  child = new (constructor = -> null) args...
+  ok child instanceof constructor
+
+test "splats and the `new` operator: functions that return functions should construct their return value", ->
+  args = []
+  fn = ->
+  child = new (constructor = -> fn) args...
+  ok child not instanceof constructor
+  eq fn, child
+
 test "implicit return", ->
 
   eq ok, new ->
@@ -506,3 +521,188 @@ test "#1416: don't omit one 'new' when compiling 'new new fn()()'", ->
   eq obj.prop, nonce
   eq obj.a, argNonceA
   eq obj.b, argNonceB
+
+test "#1840: accessing the `prototype` after function invocation should compile", ->
+  doesNotThrow -> CoffeeScript.compile 'fn()::prop'
+
+  nonce = {}
+  class Test then id: nonce
+
+  dotAccess = -> Test::
+  protoAccess = -> Test
+
+  eq dotAccess().id, nonce
+  eq protoAccess()::id, nonce
+
+test "#960: improved 'do'", ->
+
+  do (nonExistent = 'one') ->
+    eq nonExistent, 'one'
+
+  overridden = 1
+  do (overridden = 2) ->
+    eq overridden, 2
+
+  two = 2
+  do (one = 1, two, three = 3) ->
+    eq one, 1
+    eq two, 2
+    eq three, 3
+
+  ret = do func = (two) ->
+    eq two, 2
+    func
+  eq ret, func
+
+test "#2617: implicit call before unrelated implicit object", ->
+  pass = ->
+    true
+
+  result = if pass 1
+    one: 1
+  eq result.one, 1
+
+test "#2292, b: f (z),(x)", ->
+  f = (x, y) -> y
+  one = 1
+  two = 2
+  o = b: f (one),(two)
+  eq o.b, 2
+
+test "#2297, Different behaviors on interpreting literal", ->
+  foo = (x, y) -> y
+  bar =
+    baz: foo 100, on
+
+  eq bar.baz, on
+
+  qux = (x) -> x
+  quux = qux
+    corge: foo 100, true
+
+  eq quux.corge, on
+
+  xyzzy =
+    e: 1
+    f: foo
+      a: 1
+      b: 2
+    ,
+      one: 1
+      two: 2
+      three: 3
+    g:
+      a: 1
+      b: 2
+      c: foo 2,
+        one: 1
+        two: 2
+        three: 3
+      d: 3
+    four: 4
+    h: foo one: 1, two: 2, three: three: three: 3,
+      2
+
+  eq xyzzy.f.two, 2
+  eq xyzzy.g.c.three, 3
+  eq xyzzy.four, 4
+  eq xyzzy.h, 2
+
+test "#2715, Chained implicit calls", ->
+  first  = (x)    -> x
+  second = (x, y) -> y
+
+  foo = first first
+    one: 1
+  eq foo.one, 1
+
+  bar = first second
+    one: 1, 2
+  eq bar, 2
+
+  baz = first second
+    one: 1,
+    2
+  eq baz, 2
+
+test "Implicit calls and new", ->
+  first = (x) -> x
+  foo = (@x) ->
+  bar = first new foo first 1
+  eq bar.x, 1
+
+  third = (x, y, z) -> z
+  baz = first new foo new foo third
+        one: 1
+        two: 2
+        1
+        three: 3
+        2
+  eq baz.x.x.three, 3
+
+test "Loose tokens inside of explicit call lists", ->
+  first = (x) -> x
+  second = (x, y) -> y
+  one = 1
+
+  foo = second( one
+                2)
+  eq foo, 2
+
+  bar = first( first
+               one: 1)
+  eq bar.one, 1
+
+test "Non-callable literals shouldn't compile", ->
+  cantCompile '1(2)'
+  cantCompile '1 2'
+  cantCompile '/t/(2)'
+  cantCompile '/t/ 2'
+  cantCompile '///t///(2)'
+  cantCompile '///t/// 2'
+  cantCompile "''(2)"
+  cantCompile "'' 2"
+  cantCompile '""(2)'
+  cantCompile '"" 2'
+  cantCompile '""""""(2)'
+  cantCompile '"""""" 2'
+  cantCompile '{}(2)'
+  cantCompile '{} 2'
+  cantCompile '[](2)'
+  cantCompile '[] 2'
+  cantCompile '[2..9] 2'
+  cantCompile '[2..9](2)'
+  cantCompile '[1..10][2..9] 2'
+  cantCompile '[1..10][2..9](2)'
+
+test 'implicit invocation with implicit object literal', ->
+  f = (obj) -> eq 1, obj.a
+
+  f
+    a: 1
+  obj =
+    if f
+      a: 2
+    else
+      a: 1
+  eq 2, obj.a
+
+  f
+    "a": 1
+  obj =
+    if f
+      "a": 2
+    else
+      "a": 1
+  eq 2, obj.a
+
+  # #3935: Implicit call when the first key of an implicit object has interpolation.
+  a = 'a'
+  f
+    "#{a}": 1
+  obj =
+    if f
+      "#{a}": 2
+    else
+      "#{a}": 1
+  eq 2, obj.a
