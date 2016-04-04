@@ -1,6 +1,13 @@
 # Operators
 # ---------
 
+# * Operators
+# * Existential Operator (Binary)
+# * Existential Operator (Unary)
+# * Aliased Operators
+# * [not] in/of
+# * Chained Comparison
+
 test "binary (2-ary) math operators do not require spaces", ->
   a = 1
   b = -1
@@ -20,6 +27,12 @@ test "operators should respect new lines as spaced", ->
 
 test "multiple operators should space themselves", ->
   eq (+ +1), (- -1)
+
+test "compound operators on successive lines", ->
+  a = 1
+  a +=
+  1
+  eq a, 2
 
 test "bitwise operators", ->
   eq  2, (10 &   3)
@@ -42,84 +55,72 @@ test "`instanceof`", ->
   ok new Number not instanceof String
   ok new Array not instanceof Boolean
 
+test "use `::` operator on keywords `this` and `@`", ->
+  nonce = {}
+  obj =
+    withAt:   -> @::prop
+    withThis: -> this::prop
+  obj.prototype = prop: nonce
+  eq nonce, obj.withAt()
+  eq nonce, obj.withThis()
 
-#### Compound Assignment Operators
 
-test "boolean operators", ->
+# Existential Operator (Binary)
+
+test "binary existential operator", ->
   nonce = {}
 
-  a  = 0
-  a or= nonce
-  eq nonce, a
+  b = a ? nonce
+  eq nonce, b
 
-  b  = 1
-  b or= nonce
-  eq 1, b
+  a = null
+  b = undefined
+  b = a ? nonce
+  eq nonce, b
 
-  c = 0
-  c and= nonce
-  eq 0, c
+  a = false
+  b = a ? nonce
+  eq false, b
 
-  d = 1
-  d and= nonce
-  eq nonce, d
+  a = 0
+  b = a ? nonce
+  eq 0, b
 
-  # ensure that RHS is treated as a group
-  e = f = false
-  e and= f or true
-  eq false, e
+test "binary existential operator conditionally evaluates second operand", ->
+  i = 1
+  func = -> i -= 1
+  result = func() ? func()
+  eq result, 0
 
-test "compound assignment as a sub expression", ->
-  [a, b, c] = [1, 2, 3]
-  eq 6, (a + b += c)
-  eq 1, a
-  eq 5, b
-  eq 3, c
-
-# *note: this test could still use refactoring*
-test "compound assignment should be careful about caching variables", ->
-  count = 0
-  list = []
-
-  list[++count] or= 1
-  eq 1, list[1]
-  eq 1, count
-
-  list[++count] ?= 2
-  eq 2, list[2]
-  eq 2, count
-
-  list[count++] and= 6
-  eq 6, list[2]
-  eq 3, count
-
-  base = ->
-    ++count
-    base
-
-  base().four or= 4
-  eq 4, base.four
-  eq 4, count
-
-  base().five ?= 5
-  eq 5, base.five
-  eq 5, count
-
-test "compound assignment with implicit objects", ->
-  obj = undefined
-  obj ?=
-    one: 1
-
-  eq 1, obj.one
-
-  obj and=
-    two: 2
-
-  eq undefined, obj.one
-  eq         2, obj.two
+test "binary existential operator with negative number", ->
+  a = null ? - 1
+  eq -1, a
 
 
-#### `is`,`isnt`,`==`,`!=`
+# Existential Operator (Unary)
+
+test "postfix existential operator", ->
+  ok (if nonexistent? then false else true)
+  defined = true
+  ok defined?
+  defined = false
+  ok defined?
+
+test "postfix existential operator only evaluates its operand once", ->
+  semaphore = 0
+  fn = ->
+    ok false if semaphore
+    ++semaphore
+  ok(if fn()? then true else false)
+
+test "negated postfix existential operator", ->
+  ok !nothing?.value
+
+test "postfix existential operator on expressions", ->
+  eq true, (1 or 0)?, true
+
+
+# `is`,`isnt`,`==`,`!=`
 
 test "`==` and `is` should be interchangeable", ->
   a = b = 1
@@ -135,7 +136,7 @@ test "`!=` and `isnt` should be interchangeable", ->
   ok a isnt b
 
 
-#### `in`, `of`
+# [not] in/of
 
 # - `in` should check if an array contains a value using `indexOf`
 # - `of` should check if a property is defined on an object using `in`
@@ -189,8 +190,44 @@ test "#768: `in` should preserve evaluation order", ->
   ok a() not in [b(),c()]
   eq 3, share
 
+test "#1099: empty array after `in` should compile to `false`", ->
+  eq 1, [5 in []].length
+  eq false, do -> return 0 in []
 
-#### Chainable Operators
+test "#1354: optimized `in` checks should not happen when splats are present", ->
+  a = [6, 9]
+  eq 9 in [3, a...], true
+
+test "#1100: precedence in or-test compilation of `in`", ->
+  ok 0 in [1 and 0]
+  ok 0 in [1, 1 and 0]
+  ok not (0 in [1, 0 or 1])
+
+test "#1630: `in` should check `hasOwnProperty`", ->
+  ok undefined not in length: 1
+
+test "#1714: lexer bug with raw range `for` followed by `in`", ->
+  0 for [1..2]
+  ok not ('a' in ['b'])
+
+  0 for [1..2]; ok not ('a' in ['b'])
+
+  0 for [1..10] # comment ending
+  ok not ('a' in ['b'])
+
+  # lexer state (specifically @seenFor) should be reset before each compilation
+  CoffeeScript.compile "0 for [1..2]"
+  CoffeeScript.compile "'a' in ['b']"
+
+test "#1099: statically determined `not in []` reporting incorrect result", ->
+  ok 0 not in []
+
+test "#1099: make sure expression tested gets evaluted when array is empty", ->
+  a = 0
+  (do -> a = 1) in []
+  eq a, 1
+
+# Chained Comparison
 
 test "chainable operators", ->
   ok 100 > 10 > 1 > 0 > -1
@@ -222,4 +259,180 @@ test "chained operations should evaluate each value only once", ->
 
 test "#891: incorrect inversion of chained comparisons", ->
   ok (true unless 0 > 1 > 2)
-  ok (true unless (NaN = 0/0) < 0/0 < NaN)
+  ok (true unless (this.NaN = 0/0) < 0/0 < this.NaN)
+
+test "#1234: Applying a splat to :: applies the splat to the wrong object", ->
+  nonce = {}
+  class C
+    method: -> @nonce
+    nonce: nonce
+
+  arr = []
+  eq nonce, C::method arr... # should be applied to `C::`
+
+test "#1102: String literal prevents line continuation", ->
+  eq "': '", '' +
+     "': '"
+
+test "#1703, ---x is invalid JS", ->
+  x = 2
+  eq (- --x), -1
+
+test "Regression with implicit calls against an indented assignment", ->
+  eq 1, a =
+    1
+
+  eq a, 1
+
+test "#2155 ... conditional assignment to a closure", ->
+  x = null
+  func = -> x ?= (-> if true then 'hi')
+  func()
+  eq x(), 'hi'
+
+test "#2197: Existential existential double trouble", ->
+  counter = 0
+  func = -> counter++
+  func()? ? 100
+  eq counter, 1
+
+test "#2567: Optimization of negated existential produces correct result", ->
+  a = 1
+  ok !(!a?)
+  ok !b?
+
+test "#2508: Existential access of the prototype", ->
+  eq NonExistent?::nothing, undefined
+  ok Object?::toString
+
+test "power operator", ->
+  eq 27, 3 ** 3
+
+test "power operator has higher precedence than other maths operators", ->
+  eq 55, 1 + 3 ** 3 * 2
+  eq -4, -2 ** 2
+  eq false, !2 ** 2
+  eq 0, (!2) ** 2
+  eq -2, ~1 ** 5
+
+test "power operator is right associative", ->
+  eq 2, 2 ** 1 ** 3
+
+test "power operator compound assignment", ->
+  a = 2
+  a **= 3
+  eq 8, a
+
+test "floor division operator", ->
+  eq 2, 7 // 3
+  eq -3, -7 // 3
+  eq NaN, 0 // 0
+
+test "floor division operator compound assignment", ->
+  a = 7
+  a //= 2
+  eq 3, a
+
+test "modulo operator", ->
+  check = (a, b, expected) ->
+    eq expected, a %% b, "expected #{a} %%%% #{b} to be #{expected}"
+  check 0, 1, 0
+  check 0, -1, -0
+  check 1, 0, NaN
+  check 1, 2, 1
+  check 1, -2, -1
+  check 1, 3, 1
+  check 2, 3, 2
+  check 3, 3, 0
+  check 4, 3, 1
+  check -1, 3, 2
+  check -2, 3, 1
+  check -3, 3, 0
+  check -4, 3, 2
+  check 5.5, 2.5, 0.5
+  check -5.5, 2.5, 2.0
+
+test "modulo operator compound assignment", ->
+  a = -2
+  a %%= 5
+  eq 3, a
+
+test "modulo operator converts arguments to numbers", ->
+  eq 1, 1 %% '42'
+  eq 1, '1' %% 42
+  eq 1, '1' %% '42'
+
+test "#3361: Modulo operator coerces right operand once", ->
+  count = 0
+  res = 42 %% valueOf: -> count += 1
+  eq 1, count
+  eq 0, res
+
+test "#3363: Modulo operator coercing order", ->
+  count = 2
+  a = valueOf: -> count *= 2
+  b = valueOf: -> count += 1
+  eq 4, a %% b
+  eq 5, count
+
+test "#3598: Unary + and - coerce the operand once when it is an identifier", ->
+  # Unary + and - do not generate `_ref`s when the operand is a number, for
+  # readability. To make sure that they do when the operand is an identifier,
+  # test that they are consistent with another unary operator as well as another
+  # complex expression.
+  # Tip: Making one of the tests temporarily fail lets you easily inspect the
+  # compiled JavaScript.
+
+  assertOneCoercion = (fn) ->
+    count = 0
+    value = valueOf: -> count++; 1
+    fn value
+    eq 1, count
+
+  eq 1, 1 ? 0
+  eq 1, +1 ? 0
+  eq -1, -1 ? 0
+  assertOneCoercion (a) ->
+    eq 1, +a ? 0
+  assertOneCoercion (a) ->
+    eq -1, -a ? 0
+  assertOneCoercion (a) ->
+    eq -2, ~a ? 0
+  assertOneCoercion (a) ->
+    eq 0.5, a / 2 ? 0
+
+  ok -2 <= 1 < 2
+  ok -2 <= +1 < 2
+  ok -2 <= -1 < 2
+  assertOneCoercion (a) ->
+    ok -2 <= +a < 2
+  assertOneCoercion (a) ->
+    ok -2 <= -a < 2
+  assertOneCoercion (a) ->
+    ok -2 <= ~a < 2
+  assertOneCoercion (a) ->
+    ok -2 <= a / 2 < 2
+
+  arrayEq [0], (n for n in [0] by 1)
+  arrayEq [0], (n for n in [0] by +1)
+  arrayEq [0], (n for n in [0] by -1)
+  assertOneCoercion (a) ->
+    arrayEq [0], (n for n in [0] by +a)
+  assertOneCoercion (a) ->
+    arrayEq [0], (n for n in [0] by -a)
+  assertOneCoercion (a) ->
+    arrayEq [0], (n for n in [0] by ~a)
+  assertOneCoercion (a) ->
+    arrayEq [0], (n for n in [0] by a * 2 / 2)
+
+  ok 1 in [0, 1]
+  ok +1 in [0, 1]
+  ok -1 in [0, -1]
+  assertOneCoercion (a) ->
+    ok +a in [0, 1]
+  assertOneCoercion (a) ->
+    ok -a in [0, -1]
+  assertOneCoercion (a) ->
+    ok ~a in [0, -2]
+  assertOneCoercion (a) ->
+    ok a / 2 in [0, 0.5]

@@ -27,35 +27,53 @@
   start   = new Date
   success = total = done = failed = 0
 
-  say = (msg, yay) ->
+  say = (msg) ->
     div = document.createElement 'div'
     div.appendChild document.createTextNode msg
-    div.style.color = if yay then 'green' else 'red'
     stdout.appendChild div
     msg
 
-  this.test = (desc, fn) ->
+  @test = (desc, fn) ->
     fn()
 
-  this.ok = (good, msg) ->
+  @ok = (good, msg) ->
     ++total
     if good then ++success else throw Error say msg
 
-  this.eq = (x, y, msg) -> ok x is y, msg ? x + ' !== ' + y
+  @eq = (x, y, msg) -> ok x is y, msg ? x + ' !== ' + y
 
-  this.throws = (fun, err, msg) ->
-    try fun(); throw new String 'No Error'
-    catch e then eq e, err
+  arrayEqual = (a, b) ->
+    if a is b
+      # 0 isnt -0
+      a isnt 0 or 1/a is 1/b
+    else if a instanceof Array and b instanceof Array
+      return no unless a.length is b.length
+      return no for el, idx in a when not arrayEq el, b[idx]
+      yes
+    else
+      # NaN is NaN
+      a isnt a and b isnt b
 
-  CoffeeScript.run = (code, cb) ->
-    try Function(CoffeeScript.compile code, wrap: no)()
-    catch e then cb(); throw e
-    cb yes
+  @doesNotThrow = (fn) ->
+    fn()
+    ok true
+
+  @arrayEq = (a, b, msg) -> ok arrayEqual(a,b), msg
+
+  @throws = (fun, err, msg) ->
+    try
+      fun()
+    catch e
+      if err
+        eq e, err
+      else
+        ok yes
+      return
+    ok no
 
   run = (name) ->
-    CoffeeScript.load "#{name}.coffee", (yay) ->
-      say "#{ if yay then '\u2714' else '\u3000' } #{name}", yay
-      ++failed unless yay
+    CoffeeScript.load "#{name}.coffee", ->
+      say '\u2714 ' + name
       fin() if ++done is names.length
 
   fin = ->
@@ -66,31 +84,36 @@
     say msg, yay
 
   run name for name in names = [
-    'arguments'
+    'arrays'
     'assignment'
-    'break'
+    'booleans'
+    'classes'
+    'cluster'
     'comments'
+    'compilation'
+    'comprehensions'
+    'control_flow'
     'exception_handling'
+    'formatting'
+    'function_invocation'
+    'functions'
+    'helpers'
+    'importing'
+    'interpolation'
+    'javascript_literals'
+    'numbers'
+    'objects'
     'operators'
-    'regular_expressions'
-    'test_chaining'
-    'test_classes'
-    'test_compilation'
-    'test_comprehensions'
-    'test_existence'
-    'test_functions'
-    'test_helpers'
-    'test_heredocs'
-    'test_if'
-    'test_literals'
-    'test_pattern_matching'
-    'test_ranges_slices_and_splices'
-    'test_returns'
-    'test_splats'
-    'test_strings'
-    'test_switch'
-    'test_while'
+    'option_parser'
+    'ranges'
+    'regexps'
+    'scope'
+    'slicing_and_splicing'
+    'soaks'
+    'strings'
   ]
+  # allow utf-8 chars in comments
+  # 智に働けば角が立つ、情に掉させば流される。
   </script>
 
 </body>

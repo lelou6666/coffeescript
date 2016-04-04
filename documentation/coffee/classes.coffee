@@ -2,7 +2,7 @@ class Animal
   constructor: (@name) ->
 
   move: (meters) ->
-    alert @name + " moved " + meters + "m."
+    alert @name + " moved #{meters}m."
 
 class Snake extends Animal
   move: ->
@@ -19,7 +19,3 @@ tom = new Horse "Tommy the Palomino"
 
 sam.move()
 tom.move()
-
-
-
-

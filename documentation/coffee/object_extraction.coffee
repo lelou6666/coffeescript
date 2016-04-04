@@ -9,5 +9,3 @@ futurists =
     ]
 
 {poet: {name, address: [street, city]}} = futurists
-
-

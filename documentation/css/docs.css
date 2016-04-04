@@ -9,6 +9,7 @@ body {
   width: 950px;
   margin: 0;
   padding: 80px 0px 50px 50px;
+  clear: both;
 }
 p, li {
   width: 625px;
@@ -45,6 +46,7 @@ table {
   }
     td {
       padding: 9px 15px 9px 0;
+      vertical-align: top;
     }
 table.definitions {
   width: auto;
@@ -55,7 +57,7 @@ table.definitions {
     text-align: center;
     padding: 5px 20px;
   }
-code, pre, tt, textarea {
+code, pre, textarea {
   font-family: Monaco, Consolas, "Lucida Console", monospace;
   font-size: 12px;
   line-height: 18px;
@@ -63,7 +65,8 @@ code, pre, tt, textarea {
   white-space: pre-wrap;
   word-wrap: break-word;
 }
-  tt {
+  p > code, li > code {
+    display: inline-block;
     background: #fff;
     border: 1px solid #dedede;
     padding: 0px 0.2em;
@@ -79,16 +82,22 @@ code, pre, tt, textarea {
       padding-left: 0;
     }
 .timestamp {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: normal;
-  color: black;
+  text-transform: uppercase;
+}
+div.anchor {
+  position: relative;
+  top: -90px;
+  margin: 0 0 -20px;
 }
 div.code {
   position: relative;
   background: #fff;
-  -webkit-box-shadow: 0px 0px 5px rgba(0,0,0,0.3);
-  -moz-box-shadow: 0px 0px 5px rgba(0,0,0,0.3);
-  box-shadow: 0px 0px 5px rgba(0,0,0,0.3);
+  border: 1px solid #d8d8d8;
+  -webkit-box-shadow: 0px 0px 4px rgba(0,0,0,0.23);
+  -moz-box-shadow: 0px 0px 4px rgba(0,0,0,0.23);
+  box-shadow: 0px 0px 4px rgba(0,0,0,0.23);
   zoom: 1;
 }
   div.code .minibutton {
@@ -103,9 +112,12 @@ div.code {
     float: left;
     width: 450px;
     background: #fff;
-    border-left: 1px dotted #d0d0d0;
-    margin: 10px 0 15px 3px;
-    padding: 0 0 0 12px;
+    border: 1px dotted #d0d0d0;
+    border-top-width: 0;
+    border-bottom-width: 0;
+    border-right-width: 0;
+    margin: 0 3px 15px 3px;
+    padding: 10px 0 0 12px;
   }
     div.code pre:first-child {
       border-left: 0;
@@ -126,7 +138,6 @@ div.code {
   height: 50px;
   min-width: 490px;
   left: 40px; right: 40px; top: 25px;
-  padding-left: 235px;
   background: #eee;
   background: -webkit-gradient(linear, left top, left bottom, from(#f8f8f8), to(#dadada));
   background: -moz-linear-gradient(top, #f8f8f8, #dadada);
@@ -140,25 +151,14 @@ div.code {
 }
   #logo {
     display: block;
-    width: 215px; height: 50px;
-    background: url('../images/logo.png');
-    position: absolute;
-    top: 0px; left: 10px;
+    outline: none;
+    float: left;
+    width: 242px;
+    margin-left: 10px;
   }
-  #error {
-    position: absolute;
-    -webkit-border-radius: 6px; -moz-border-radius: 6px; border-radius: 6px;
-    right: 15px; top: 15px; left: 730px;
-    height: 15px;
-    padding: 2px 5px;
-    background: #fdcdcc;
-    color: #864544;
-    border: 1px solid #864544;
-    font-size: 10px;
-    line-height: 15px;
-    overflow: hidden;
-    text-transform: uppercase;
-  }
+    #logo img {
+      margin: 5px 0 0 3px;
+    }
   .navigation {
     height: 50px;
     font-size: 11px;
@@ -225,6 +225,7 @@ div.code {
         display: block;
       }
       .navigation .contents.menu {
+        z-index: 100;
         border-top: 0;
         -webkit-border-top-left-radius: 0; -moz-border-radius-topleft: 0; border-top-left-radius: 0;
         -webkit-border-top-right-radius: 0; -moz-border-radius-topright: 0; border-top-right-radius: 0;
@@ -238,18 +239,27 @@ div.code {
       }
         .navigation .repl_bridge {
           position: absolute;
-          left: 397px;
-          width: 150px; height: 13px;
-          top: -15px;
+          height: 12px;
+          left: -1px; right: -1px;
+          bottom: -14px;
           border: 1px solid #aaa;
+          z-index: 5;
           background: #fff;
+          display: none;
           border-top-color: #fff; border-bottom-color: #fff;
         }
+          .navigation.active .repl_bridge {
+            display: block;
+          }
         .navigation .code .minibutton {
           top: 10px; right: 10px;
           width: 40px;
           text-transform: none;
         }
+          .navigation .code a.minibutton.permalink {
+            top: 38px;
+            display: block;
+          }
 
 .bookmark {
   display: block;
@@ -259,6 +269,7 @@ div.code {
 }
 
 .navigation .contents.repl_wrapper .code {
+  cursor: text;
   -webkit-box-shadow: none; -moz-box-shadow: none; box-shadow: none;
   background: #181a3a url(../images/banding.png);
   border: 2px solid #555;
@@ -300,24 +311,31 @@ div.code {
     margin-bottom: 0;
     top: 10px; left: 10px; right: 10px; bottom: 15px;
   }
+    #repl_results.error {
+      color: red
+    }
     #repl_source_wrap {
       margin-left: 5px;
-      width: 45%; right: 50%;
-      position: relative;
+      width: 47%; right: 50%;
       float: left;
     }
-    #repl_source {
-      padding-left: 5px;
-      width: 96%;
-      border: 0;
-      resize: none;
+      #repl_source {
+        padding-left: 5px;
+        width: 100%;
+        height: 100%;
+        border: 0;
+        overflow-y: auto;
+        resize: none;
+      }
+    #repl_results_wrap {
+      white-space: pre;
     }
-    #repl_results {
-      text-transform: none;
-      overflow-y: auto;
-      left: 50%;
-      border-left-color: #555;
-    }
+      #repl_results {
+        text-transform: none;
+        overflow-y: auto;
+        left: 50%;
+        border-left-color: #555;
+      }
 
 /*----------------------------- Mini Buttons ---------------------------------*/
 .minibutton {
@@ -358,3 +376,42 @@ div.code {
     background-image: url(../images/button_bg_dark.gif);
     text-shadow: none;
   }
+  .minibutton.error {
+     opacity: 0.5;
+     color: #600;
+     cursor: not-allowed;
+  }
+
+@media (max-width: 820px) {
+  .container {
+    width: auto;
+    padding: 1em;
+  }
+  p, li, table {
+    width: auto;
+  }
+  #fadeout {
+    display: none;
+  }
+  #flybar {
+    position: static;
+    height: auto;
+    min-width: 245px;
+  }
+    #logo {
+      float: none;
+    }
+    .navigation {
+      float: none;
+      border: none;
+    }
+  div.code pre, div.code textarea {
+    border-left: none;
+    border-top-width: 1px;
+    width: auto;
+    float: none;
+  }
+    div.code pre:first-child {
+      border-top: none;
+    }
+}
